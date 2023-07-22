@@ -1,12 +1,20 @@
 package com.driver;
 
-import java.sql.Timestamp;
 import java.util.Date;
 
 public class Message {
     private int id;
     private String content;
     private Date timestamp;
+
+    public Message() {
+    }
+
+    public Message(int id, String content) {
+        this.id = id;
+        this.content = content;
+        this.timestamp = new Date();
+    }
 
     public int getId() {
         return id;
@@ -28,9 +36,7 @@ public class Message {
         return timestamp;
     }
 
-    public Message(int id, String content) {
-        this.id = id;
-        this.content = content;
-        this.timestamp = new Timestamp(System.currentTimeMillis());
+    public void setTimestamp(Date timestamp) {
+        this.timestamp = timestamp;
     }
 }

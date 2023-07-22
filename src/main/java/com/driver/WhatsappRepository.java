@@ -2,84 +2,105 @@ package com.driver;
 
 import org.springframework.stereotype.Repository;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 
 @Repository
 public class WhatsappRepository {
 
-    //Assume that each user belongs to at most one group
-    //You can use the below mentioned hashmaps or delete these and create your own.
-    private HashMap<Group, List<User>> groupUserMap;
-    private HashMap<Group, List<Message>> groupMessageMap;
-    private HashMap<Message, User> senderMap;
-    private HashMap<Group, User> adminMap;
-    private HashSet<String> userMobile;
-    private HashMap<String, User> users;
-    private int customGroupCount;
-    private int messageId;
+    private HashMap<String,User> userDB = new HashMap<>();
 
-    public WhatsappRepository(){
-        this.groupMessageMap = new HashMap<Group, List<Message>>();
-        this.groupUserMap = new HashMap<Group, List<User>>();
-        this.senderMap = new HashMap<Message, User>();
-        this.adminMap = new HashMap<Group, User>();
-        this.userMobile = new HashSet<>();
-        this.users = new HashMap<>();
-        this.customGroupCount = 0;
-        this.messageId = 0;
-    }
+    private HashMap<Group,List<User>> groupUserListDB = new HashMap<>();
+
+    private HashMap<Group, User> adminDB = new HashMap<>();
+
+    private int customGroupCount=1;
+    private int messageId=1;
+
+    private HashMap<Group, List<Message>> groupMessageDB=new HashMap<>();
+
+    private HashMap<Message, User> senderDB=new HashMap<>();
+
 
     public boolean createUser(String name, String mobile) {
-        if(userMobile.contains(mobile))
-            return false;
-        userMobile.add(mobile);
-        users.put(mobile, new User(name, mobile));
+        if (userDB.containsKey(mobile)) return false;
+        userDB.put(mobile,new User(name,mobile));
         return true;
     }
 
+    public Group createGroup(List<User> users) {
+        if (users.size()==2){
+            Group group = new Group(users.get(1).getName(),2);
+            this.groupUserListDB.put(group,users);
+            adminDB.put(group,users.get(0));
+            return group;
+        }
 
+        String name="Group "+this.customGroupCount;
+        Group group = new Group(name,users.size());
+        this.groupUserListDB.put(group,users);
 
-    public int getGroupCount(){
-        return customGroupCount;
-    }
-    public void setGroupCount(int count){
-        this.customGroupCount = count;
-    }
-    public int getMessageId(){
-        return messageId;
-    }
-    public void setMessageId(int id){
-        this.messageId = id;
-    }
-
-    public void createGroup(User admin, Group group, List<User> userList) {
-        this.groupUserMap.put(group, userList);
-        this.adminMap.put(group, admin);
+        adminDB.put(group,users.get(0));
+        this.customGroupCount++;
+        return group;
     }
 
-    public List<User> getUsersByGroup(Group group) {
-        return groupUserMap.getOrDefault(group, null);
+    public int createMessage(String content) {
+        Message message=new Message(messageId,content);
+        messageId++;
+        return message.getId();
     }
 
-    public void sendMessage(Message message, User sender, Group group) {
-        List<Message> msgList = this.groupMessageMap.getOrDefault(group, new ArrayList<>());
-        msgList.add(message);
-        this.senderMap.put(message, sender);
+    public int sendMessage(Message message, User sender, Group group) throws Exception {
+        if (!groupUserListDB.containsKey(group)) throw new Exception("Group does not exist");
+        if (!groupUserListDB.get(group).contains(sender)) throw new Exception("You are not allowed to send message");
+        List<Message> msg = groupMessageDB.getOrDefault(group,new ArrayList<>());
+        msg.add(message);
+        groupMessageDB.put(group,msg);
+        senderDB.put(message,sender);
+        return msg.size();
     }
 
-    public int getGroupMessageCount(Group group) {
-        return this.groupMessageMap.get(group).size();
+    public String changeAdmin(User approver, User user, Group group) throws Exception{
+        if (!groupUserListDB.containsKey(group)) throw new Exception("Group does not exist");
+        if (!adminDB.get(group).getName().equals(approver.getName())) throw new Exception("Approver does not have rights");
+        if (!groupUserListDB.get(group).contains(user)) throw new Exception("User is not a participant");
+        adminDB.put(group,user);
+        return "SUCCESS";
     }
 
-    public User getAdmin(Group group) {
-        return this.adminMap.get(group);
+    public int removeUser(User user) throws Exception{
+
+        for (Group group:groupUserListDB.keySet()) {
+            if (groupUserListDB.get(group).contains(user)){
+                if (adminDB.get(group).equals(user)) throw new Exception("Cannot remove admin");
+
+                groupUserListDB.get(group).remove(user);
+                List<Message> messages= new ArrayList<>();
+                for (Message message:groupMessageDB.get(group)) {
+                    if(senderDB.get(message).equals(user)){
+                        senderDB.remove(message);
+                    }else messages.add(message);
+                }
+                groupMessageDB.put(group,messages);
+                return groupUserListDB.get(group).size()+messages.size()+senderDB.size();
+            }
+        }
+        throw new Exception("User not found");
     }
 
-    public void changeAdmin(User user, Group group) {
-        this.adminMap.remove(group);
-        this.adminMap.put(group, user);
+    public String findMessage(Date start, Date end, int k) throws Exception {
+        List<Message> messages=new ArrayList<>();
+        for (Message msg:senderDB.keySet()) {
+            if (start.before(msg.getTimestamp()) && end.after(msg.getTimestamp())) messages.add(msg);
+        }
+
+        if (k>messages.size()) throw new Exception("K is greater than the number of messages");
+
+        Collections.sort(messages,(a, b)->{
+            if(a.getTimestamp().before(b.getTimestamp())) return -1;
+            return 1;
+        });
+
+        return messages.get(messages.size()-k).toString();
     }
 }
